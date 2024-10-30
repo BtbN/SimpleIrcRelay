@@ -3,6 +3,7 @@ import requests
 from trac.core import *
 from trac.ticket.api import ITicketChangeListener
 from trac.config import Option
+from trac.util.text import exception_to_unicode
 
 
 class SimpleIrcRelay(Component):
@@ -32,5 +33,8 @@ class SimpleIrcRelay(Component):
         pass
 
     def _send_msg(self, msg):
-        req = requests.put(self.message_url, data=msg)
-        req.raise_for_status()
+        try:
+            req = requests.put(self.message_url, data=msg)
+            req.raise_for_status()
+        except Exception as e:
+            self.log.error("Failed putting to IRC relay: %s", exception_to_unicode(e))
