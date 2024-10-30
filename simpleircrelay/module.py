@@ -13,7 +13,9 @@ class SimpleIrcRelay(Component):
     def ticket_created(self, ticket):
         if self.message_url is None:
             return
-        base_url = self.config.get('trac', 'base_url', 'https://unset/')
+        base_url = self.config.get("trac", "base_url", "https://unset/")
+        if not base_url.endswith("/"):
+            base_url += "/"
         msg = f"[newticket] {ticket['reporter']}: Ticket #{ticket.id} ([{ticket['component']}] {ticket['summary']}) created {base_url}ticket/{ticket.id}"
         self._send_msg(msg)
 
