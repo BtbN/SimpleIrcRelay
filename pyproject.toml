@@ -1,0 +1,15 @@
+[project]
+name = "simpleircrelay"
+version = "1.0"
+dependencies = [
+  "irc",
+  "aiohttp",
+  "requests"
+]
+requires-python = ">=3.10"
+
+[project.scripts]
+simpleircrelay = "simpleircrelay.bot:bot_main"
+
+[project.entry-points."trac.plugins"]
+simpleircrelay = "simpleircrelay.module"
