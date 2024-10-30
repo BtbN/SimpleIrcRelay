@@ -83,7 +83,7 @@ def bot_main():
     port = int(port.replace("+", ""))
 
     http_host = os.getenv("IRC_HTTP_HOST", "localhost")
-    http_port = int(os.getenv("IRC_HTTP_PORT", "8080"))
+    http_port = int(os.getenv("IRC_HTTP_PORT", "8787"))
 
     client = AioSimpleIRCClient(channel, http_host, http_port)
 

@@ -1,3 +1,4 @@
 build/
 venv/
-simpleircrelay.egg-info
+__pycache__/
+*.egg-info/
