@@ -23,6 +23,8 @@ class SimpleIrcRelay(Component):
             return
         base_url = self._base_url()
         msg = f"[editedticket] {author or 'unknown'}: Ticket #{ticket.id} ([{ticket['component']}] {ticket['summary']}) updated {base_url}ticket/{ticket.id}"
+        if hasattr(ticket, 'cur_cnum'):
+            msg += f"#comment:{ticket.cur_cnum}"
         self._send_msg(msg)
 
     def ticket_deleted(self, ticket):
