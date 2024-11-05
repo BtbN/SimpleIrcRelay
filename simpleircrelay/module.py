@@ -31,11 +31,7 @@ class SimpleIrcRelay(Component):
         pass
 
     def ticket_comment_modified(self, ticket, cdate, author, comment, old_comment):
-        if self.message_url is None or not comment:
-            return
-        base_url = self._base_url()
-        msg = f"[editedticket] {author or 'unknown'}: Ticket #{ticket.id} ([{ticket['component']}] {ticket['summary']}) updated {base_url}ticket/{ticket.id}"
-        self._send_msg(msg)
+        pass
 
     def ticket_change_deleted(self, ticket, cdate, changes):
         pass
