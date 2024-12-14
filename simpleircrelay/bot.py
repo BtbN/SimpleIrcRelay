@@ -32,15 +32,7 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
 
     def on_disconnect(self, con, event):
         print("Disconnected")
-        if self.future:
-            self.future.cancel()
-        self.future = asyncio.ensure_future(self.cleanup_self(), loop=con.reactor.loop)
-
-    async def cleanup_self(self):
-        if not self.is_setup:
-            return
-        await self.runner.cleanup()
-        asyncio.get_running_loop().stop()
+        sys.exit(0)
 
     async def setup_server(self):
         if self.is_setup:
