@@ -41,6 +41,7 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
         try:
             self.app = web.Application()
             self.app.router.add_put("/message", self.sendmsg)
+            self.app.router.add_post("/slack", self.sendslackmsg)
 
             print("Setting up runner...")
 
@@ -62,6 +63,13 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
         msg = await req.text()
         print("Posting message: " + msg)
         self.connection.privmsg(self.channel, msg)
+        return web.Response()
+
+    async def sendslackmsg(self, req):
+        msg = await req.json()
+        text = msg["text"]
+        print("Posting message: " + text)
+        self.connection.privmsg(self.channel, text)
         return web.Response()
 
 
