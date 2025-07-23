@@ -7,6 +7,7 @@ import irc.client_aio
 
 import functools
 import asyncio
+import html
 import sys
 import os
 import re
@@ -23,6 +24,7 @@ def cleanup_slack_msg(text):
         return f"{desc} ({url})"
     text = LINK_WITH_DESC.sub(link, text)
     text = BARE_LINK.sub(r'\1', text)
+    text = html.unescape(text)
     return text
 
 
