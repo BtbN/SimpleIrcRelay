@@ -12,14 +12,17 @@ import os
 import re
 
 
+LINK_WITH_DESC = re.compile(r'<([^|>]+)\|([^>]+)>')
+BARE_LINK = re.compile(r'<([^|>]+)>')
+
 def cleanup_slack_msg(text):
     def link(match):
         url, desc = match.group(1), match.group(2)
         if "/src/branch/" in url:
             return desc
         return f"{desc} ({url})"
-    text = re.sub(r'<([^|>]+)\|([^>]+)>', link, text)
-    text = re.sub(r'<([^|>]+)>', r'\1', text)
+    text = LINK_WITH_DESC.sub(link, text)
+    text = BARE_LINK.sub(r'\1', text)
     return text
 
 
