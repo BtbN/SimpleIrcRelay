@@ -9,6 +9,18 @@ import functools
 import asyncio
 import sys
 import os
+import re
+
+
+def cleanup_slack_msg(text):
+    def link(match):
+        url, desc = match.group(1), match.group(2)
+        if "/src/branch/" in url:
+            return desc
+        return f"{desc} ({url})"
+    text = re.sub(r'<([^|>]+)\|([^>]+)>', link, text)
+    text = re.sub(r'<([^|>]+)>', r'\1', text)
+    return text
 
 
 class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
@@ -67,7 +79,7 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
 
     async def sendslackmsg(self, req):
         msg = await req.json()
-        text = msg["text"]
+        text = cleanup_slack_msg(msg["text"])
         print("Posting message: " + text)
         self.connection.privmsg(self.channel, text)
         return web.Response()
