@@ -59,6 +59,7 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
             self.app = web.Application()
             self.app.router.add_put("/message", self.sendmsg)
             self.app.router.add_post("/slack", self.sendslackmsg)
+            self.app.router.add_post("/forgejo", self.sendfjmsg)
 
             print("Setting up runner...")
 
@@ -87,6 +88,14 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
         text = cleanup_slack_msg(msg["text"])
         print("Posting message: " + text)
         self.connection.privmsg(self.channel, text)
+        return web.Response()
+
+    async def sendfjmsg(self, req):
+        event_type = req.headers.get("X-Forgejo-Event")
+        if not event_type:
+            raise HTTPBadRequest()
+        msg = await req.json()
+        print("Got FJ " + event_type + " message: " + repr(msg))
         return web.Response()
 
 
