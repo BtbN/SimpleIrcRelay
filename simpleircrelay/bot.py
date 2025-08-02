@@ -5,7 +5,6 @@ from aiohttp import web
 import irc.client
 import irc.client_aio
 
-import functools
 import asyncio
 import html
 import sys
@@ -93,7 +92,7 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
     async def sendfjmsg(self, req):
         event_type = req.headers.get("X-Forgejo-Event")
         if not event_type:
-            raise HTTPBadRequest()
+            raise web.HTTPBadRequest()
         msg = await req.json()
         print("Got FJ " + event_type + " message: " + repr(msg))
         return web.Response()
