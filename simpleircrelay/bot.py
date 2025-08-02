@@ -6,6 +6,7 @@ import irc.client
 import irc.client_aio
 
 import asyncio
+import collections
 import html
 import sys
 import os
@@ -27,6 +28,10 @@ def cleanup_slack_msg(text):
     return text
 
 
+def noping(username):
+    return f"{username[0:1]}\u200b{username[1:]}"
+
+
 class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
     def __init__(self, channel, http_host, http_port):
         super().__init__()
@@ -37,6 +42,8 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
         self.is_setup = False
 
         self.future = None
+
+        self.pr_merge_sha_cache = collections.deque(maxlen=10)
 
     def on_welcome(self, con, event):
         print("Connected!")
@@ -76,26 +83,91 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
             print(e)
             sys.exit(1)
 
-    async def sendmsg(self, req):
-        msg = await req.text()
+    def post(self, msg):
         print("Posting message: " + msg)
         self.connection.privmsg(self.channel, msg)
+
+    async def sendmsg(self, req):
+        msg = await req.text()
+        self.post(msg)
         return web.Response()
 
     async def sendslackmsg(self, req):
         msg = await req.json()
         text = cleanup_slack_msg(msg["text"])
-        print("Posting message: " + text)
-        self.connection.privmsg(self.channel, text)
+        self.post(text)
         return web.Response()
 
     async def sendfjmsg(self, req):
-        event_type = req.headers.get("X-Forgejo-Event")
+        event_type = req.headers.get("X-Forgejo-Event", "")
+        if not event_type:
+            event_type = req.headers.get("X-GitHub-Event", "")
+
         if not event_type:
             raise web.HTTPBadRequest()
+
         msg = await req.json()
-        print("Got FJ " + event_type + " message: " + repr(msg))
+        action = msg.get("action", "")
+
+        if event_type == "pull_request" and action == "opened":
+            self.handle_pr_issue_opened(msg, action)
+        elif event_type == "pull_request" and action == "reopened":
+            self.handle_pr_issue_opened(msg, action)
+        elif event_type == "pull_request" and action == "closed":
+            self.handle_pr_issue_closed(msg)
+        elif event_type == "issue" and action == "opened":
+            self.handle_pr_issue_opened(msg, action)
+        elif event_type == "issue" and action == "reopened":
+            self.handle_pr_issue_opened(msg, action)
+        elif event_type == "issue" and action == "closed":
+            self.handle_pr_issue_closed(msg)
+        elif event_type == "issue_comment" and action == "created":
+            self.handle_issue_comment(msg)
+        elif event_type == "push":
+            self.handle_push(msg)
+
         return web.Response()
+
+    def handle_pr_issue_opened(self, msg, action):
+        obj = msg.get('pull_request', msg.get('issue', {}))
+        repo = msg['repository']
+        user = msg['sender']
+        issue_type = 'Pull request' if msg.get('pull_request', None) else 'Issue'
+
+        text = f"[{repo['full_name']}] {issue_type} #{obj['number']} {action}: {obj['title']} ({obj['html_url']}) by {noping(user['username'])}"
+        self.post(text)
+
+    def handle_issue_comment(self, msg):
+        issue = msg['issue']
+        repo = msg['repository']
+        user = issue['sender']
+        issue_type = 'pull request' if issue.get('is_pull', False) else 'issue'
+
+        text = f"[{repo['full_name']}] New comment on {issue_type} #{issue['number']} {issue['title']} ({issue['url']}) by {noping(user['username'])}"
+        self.post(text)
+
+    def handle_pr_issue_closed(self, msg):
+        obj = msg.get('pull_request', msg.get('issue', {}))
+        repo = msg['repository']
+        user = msg['sender']
+        action = 'merged' if obj.get('merged', False) else 'closed'
+
+        if merge_sha := obj.get('merge_commit_sha', ''):
+            self.pr_merge_sha_cache.append(merge_sha)
+
+        text = f"[{repo['full_name']}] Pull request #{obj['number']} {action}: {obj['title']} ({obj['html_url']}) by {noping(user['username'])}"
+        self.post(text)
+
+    def handle_push(self, msg):
+        # Skip PR merges, as we just announced them as such
+        if msg['after'] in self.pr_merge_sha_cache:
+            return
+
+        ref = msg['ref'].removeprefix('refs/heads/')
+        repo = msg['repository']
+
+        text = f"[{repo['full_name']}:{ref}] {len(msg['commits'])} new commit{'s' if len(msg['commits']) > 1 else ''} ({msg['compare_url']}) pushed by {noping(msg['pusher']['username'])}"
+        self.post(text)
 
 
 def bot_main():
