@@ -158,6 +158,7 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
             msg = MIMEText('', 'plain')
             msg['From'] = f"{sender_name} <{mail_from}>"
             msg['To'] = mail_to
+            msg['Reply-To'] = f"{sender_name} <{sender['email']}>"
             msg['Subject'] = f"[PATCH] {pr['title']} (PR #{pr['number']})"
 
             if sender_name != sender_username:
