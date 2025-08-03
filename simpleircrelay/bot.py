@@ -181,7 +181,8 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
                 port=int(os.getenv("SMTP_PORT", "25")),
                 username=os.getenv("SMTP_USER", None),
                 password=os.getenv("SMTP_PASS", None),
-                use_tls=os.getenv("SMTP_TLS", "true").lower() != "false"
+                use_tls=os.getenv("SMTP_SSL", "false").lower() == "true",
+                start_tls=(os.getenv("SMTP_TLS", "true").lower() != "false") or None
             )
 
             print(f"Email sent for PR #{pr['number']}")
