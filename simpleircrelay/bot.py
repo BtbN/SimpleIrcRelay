@@ -201,7 +201,7 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
     def handle_issue_comment(self, msg):
         issue = msg['issue']
         repo = msg['repository']
-        user = issue['sender']
+        user = msg['sender']
         issue_type = 'pull request' if issue.get('is_pull', False) else 'issue'
 
         text = f"[{repo['full_name']}] New comment on {issue_type} #{issue['number']} {issue['title']} ({issue['url']}) by {noping(user['username'])}"
