@@ -166,14 +166,13 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
             else:
                 sender_display = sender_name
 
-            email_body = f"""PR #{pr['number']} opened by {sender_display}
-            URL: {pr['html_url']}
-            Patch URL: {pr['patch_url']}
-
-            {pr_body if pr_body else ''}
-            """
-            email_body = f"{inspect.cleandoc(email_body)}\n\n{patch_content}"
-
+            email_body = (
+                f"PR #{pr['number']} opened by {sender_display}\n"
+                f"URL: {pr['html_url']}\n"
+                f"Patch URL: {pr['patch_url']}\n\n"
+                f"{pr_body}\n"
+                f"{'\n\n' if pr_body else ''}{patch_content}"
+            )
             msg.set_payload(email_body)
 
             await aiosmtplib.send(
