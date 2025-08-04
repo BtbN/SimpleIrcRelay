@@ -34,7 +34,7 @@ def cleanup_slack_msg(text):
 
 
 def noping(username):
-    return f"{username[0:1]}\u200b{username[1:]}"
+    return f"{username[0:1]}\u2060{username[1:]}"
 
 
 class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
