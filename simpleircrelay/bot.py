@@ -227,7 +227,7 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
         ref = msg['ref'].removeprefix('refs/heads/')
         repo = msg['repository']
 
-        text = f"[{repo['full_name']}:{ref}] {len(msg['commits'])} new commit{'s' if len(msg['commits']) > 1 else ''} ({msg['compare_url']}) pushed by {noping(msg['pusher']['username'])}"
+        text = f"[{repo['full_name']}:{ref}] {msg['total_commits']} new commit{'s' if int(msg['total_commits']) > 1 else ''} ({msg['compare_url']}) pushed by {noping(msg['pusher']['username'])}"
         self.post(text)
 
 
