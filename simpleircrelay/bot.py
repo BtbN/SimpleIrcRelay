@@ -202,7 +202,7 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
         issue = msg['issue']
         repo = msg['repository']
         user = msg['sender']
-        issue_type = 'pull request' if issue.get('is_pull', False) else 'issue'
+        issue_type = 'pull request' if msg.get('is_pull', False) else 'issue'
 
         text = f"[{repo['full_name']}] New comment on {issue_type} #{issue['number']} {issue['title']} ({msg['comment']['html_url']}) by {noping(user['username'])}"
         self.post(text)
