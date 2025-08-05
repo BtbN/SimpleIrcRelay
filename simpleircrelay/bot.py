@@ -3,8 +3,10 @@
 from aiohttp import web
 import aiohttp
 import aiosmtplib
+from email.header import Header
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.utils import formataddr
 
 import irc.client
 import irc.client_aio
@@ -155,12 +157,6 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
                     else:
                         patch_content = f"Could not fetch patch content (HTTP {response.status})"
 
-            msg = MIMEText('', 'plain')
-            msg['From'] = f"{sender_name} <{mail_from}>"
-            msg['To'] = mail_to
-            msg['Reply-To'] = f"{sender_name} <{sender['email']}>"
-            msg['Subject'] = f"[PATCH] {pr['title']} (PR #{pr['number']})"
-
             if sender_name != sender_username:
                 sender_display = f"{sender_name} ({sender_username})"
             else:
@@ -173,7 +169,12 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
                 f"{pr_body}\n"
                 f"{'\n\n' if pr_body else ''}{patch_content}"
             )
-            msg.set_payload(email_body)
+
+            msg = MIMEText(email_body, 'plain', 'utf-8')
+            msg['From'] = formataddr((str(Header(sender_name, 'utf-8')), mail_from), 'utf-8')
+            msg['To'] = mail_to
+            msg['Reply-To'] = formataddr((str(Header(sender_name, 'utf-8')), sender['email']), 'utf-8')
+            msg['Subject'] = Header(f"[PATCH] {pr['title']} (PR #{pr['number']})", 'utf-8')
 
             await aiosmtplib.send(
                 msg,
