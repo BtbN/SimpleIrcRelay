@@ -304,11 +304,11 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
             }
             payload = {
                 "ref": "master",
-                "inputs": CICOUNTS
+                "inputs": {str(k): str(v) for k, v in CICOUNTS.items()}
             }
             async with session.post(f"{GHAPIURL}/repos/{GHREPO}/actions/workflows/{GHCIID}/dispatches", headers=headers, json=payload) as response:
                 if response.status != 204:
-                    print(f"Failed to trigger GitHub CI: {response.status}")
+                    print(f"Failed to trigger GitHub CI: {response.status} (for {payload})")
                     return
                 print(f"GitHub CI triggered: {CICOUNTS} for {LAUNCHEDJOBS}")
 
