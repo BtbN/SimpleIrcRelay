@@ -5,14 +5,13 @@ import aiohttp
 import aiosmtplib
 from email.header import Header
 from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from email.utils import formataddr
+from cachetools import TTLCache
 
 import irc.client
 import irc.client_aio
 
 import asyncio
-import collections
 import html
 import sys
 import os
@@ -49,7 +48,10 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
 
         self.future = None
 
-        self.pr_merge_sha_cache = collections.deque(maxlen=10)
+        self.pr_merge_sha_cache = TTLCache(maxsize=10, ttl=30)
+        self.handled_jobs_cache = TTLCache(maxsize=10000, ttl=60*60*3)
+        self.ci_check_tasks = []
+        self.ci_check_lock = asyncio.Lock()
 
     def on_welcome(self, con, event):
         print("Connected!")
@@ -116,11 +118,14 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
         action = msg.get("action", "")
 
         if event_type == "pull_request" and action == "opened":
+            self.launch_delayed_ci()
             self.handle_pr_issue_opened(msg, action)
             if "SMTP_HOST" in os.environ:
                 asyncio.create_task(self.send_pr_email(msg))
         elif event_type == "pull_request" and action == "reopened":
             self.handle_pr_issue_opened(msg, action)
+        elif event_type == "pull_request" and action == "synchronized":
+            self.launch_delayed_ci()
         elif event_type == "pull_request" and action == "closed":
             self.handle_pr_issue_closed(msg)
         elif event_type == "issue" and action == "opened":
@@ -132,6 +137,7 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
         elif event_type == "issue_comment" and action == "created":
             self.handle_issue_comment(msg)
         elif event_type == "push":
+            self.launch_delayed_ci()
             self.handle_push(msg)
 
         return web.Response()
@@ -214,7 +220,7 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
         action = 'merged' if obj.get('merged', False) else 'closed'
 
         if merge_sha := obj.get('merge_commit_sha', ''):
-            self.pr_merge_sha_cache.append(merge_sha)
+            self.pr_merge_sha_cache[merge_sha] = True
 
         text = f"[{repo['full_name']}] Pull request #{obj['number']} {action}: {obj['title']} ({obj['html_url']}) by {noping(user['username'])}"
         self.post(text)
@@ -229,6 +235,85 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
 
         text = f"[{repo['full_name']}:{ref}] {msg['total_commits']} new commit{'s' if int(msg['total_commits']) > 1 else ''} ({msg['compare_url']}) pushed by {noping(msg['pusher']['username'])}"
         self.post(text)
+
+    def launch_delayed_ci(self):
+        self.ci_check_tasks = [task for task in self.ci_check_tasks if not task.done()]
+        if len(self.ci_check_tasks) > 1:
+            self.ci_check_tasks.pop().cancel()
+        self.ci_check_tasks.append(asyncio.create_task(self.delayed_ci_check()))
+
+    async def delayed_ci_check(self):
+        try:
+            await asyncio.sleep(20)
+            async with self.ci_check_lock:
+                await self.check_trigger_ci()
+        finally:
+            ct = asyncio.current_task()
+            if ct in self.ci_check_tasks:
+                self.ci_check_tasks.remove(ct)
+
+    async def check_trigger_ci(self):
+        GHTOKEN=os.getenv("GHCITOKEN", None)
+        GHREPO=os.getenv("GHREPO", "BtbN/FFmpeg-CI")
+        GHCIID=os.getenv("GHCID", "ci.yml")
+        GHAPIURL=os.getenv("GHAPIURL", "https://api.github.com")
+        FJTOKEN=os.getenv("FJCITOKEN", None)
+        FJLABELS=os.getenv("FJLABELS", "linux-aarch64:aarch64_count,linux-amd64:x86_64_count").split(",")
+        FJACTID=os.getenv("FJACTID", "orgs/FFmpeg")
+        FJURL=os.getenv("FJURL", "http://forgejo:3000")
+
+        if not GHTOKEN or not FJTOKEN:
+            return
+
+        FJLABELMAP = {}
+        for label in FJLABELS:
+            val = label.split(':', 1)
+            FJLABELMAP[val[0]] = val[1] if len(val) > 1 else val[0]
+
+        CICOUNTS={}
+        LAUNCHEDJOBS = set()
+        async with aiohttp.ClientSession() as session:
+            headers = {
+                "Accept": "application/json",
+                "Authorization": f"Bearer {FJTOKEN}"
+            }
+            async with session.get(f"{FJURL}/api/v1/{FJACTID}/actions/runners/jobs?labels={','.join(FJLABELMAP.keys())}", headers=headers) as response:
+                if response.status != 200:
+                    print(f"Failed to fetch Forgejo runners: {response.status}")
+                    return
+                data = await response.json()
+                if not data or len(data) == 0:
+                    print("No jobs to check.")
+                    return
+                for job in data:
+                    if job['status'] != 'waiting' or job['id'] in self.handled_jobs_cache:
+                        continue
+                    for label in job['runs_on']:
+                        if label in FJLABELMAP:
+                            CICOUNTS[FJLABELMAP[label]] = CICOUNTS.get(FJLABELMAP[label], 0) + 1
+                            LAUNCHEDJOBS.add(job['id'])
+
+            if not CICOUNTS:
+                print("No jobs to launch.")
+                return
+
+            headers = {
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28",
+                "Authorization": f"Bearer {GHTOKEN}"
+            }
+            payload = {
+                "ref": "master",
+                "inputs": CICOUNTS
+            }
+            async with session.post(f"{GHAPIURL}/repos/{GHREPO}/actions/workflows/{GHCIID}/dispatches", headers=headers, json=payload) as response:
+                if response.status != 204:
+                    print(f"Failed to trigger GitHub CI: {response.status}")
+                    return
+                print(f"GitHub CI triggered: {CICOUNTS} for {LAUNCHEDJOBS}")
+
+        for job_id in LAUNCHEDJOBS:
+            self.handled_jobs_cache[job_id] = True
 
 
 def bot_main():

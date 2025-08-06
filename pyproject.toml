@@ -9,6 +9,7 @@ dependencies = [
   "irc",
   "aiohttp",
   "aiosmtplib",
+  "cachetools",
   "requests"
 ]
 requires-python = ">=3.10"
