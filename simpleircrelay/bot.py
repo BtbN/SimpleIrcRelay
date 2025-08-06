@@ -14,7 +14,6 @@ import irc.client_aio
 import asyncio
 import collections
 import html
-import inspect
 import sys
 import os
 import re
