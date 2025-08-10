@@ -85,6 +85,8 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
             self.site = web.TCPSite(self.runner, self.http_host, self.http_port)
             await self.site.start()
 
+            asyncio.create_task(self.periodic_ci_check())
+
             print("Setup done")
             self.is_setup = True
         except Exception as e:
@@ -235,6 +237,12 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
 
         text = f"[{repo['full_name']}:{ref}] {msg['total_commits']} new commit{'s' if int(msg['total_commits']) > 1 else ''} ({msg['compare_url']}) pushed by {noping(msg['pusher']['username'])}"
         self.post(text)
+
+    async def periodic_ci_check(self):
+        while True:
+            if not len(self.ci_check_tasks):
+                self.launch_delayed_ci()
+            await asyncio.sleep(60)
 
     def launch_delayed_ci(self):
         self.ci_check_tasks = [task for task in self.ci_check_tasks if not task.done()]
