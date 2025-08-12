@@ -262,7 +262,7 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
 
     async def check_trigger_ci(self):
         GHTOKEN=os.getenv("GHCITOKEN", None)
-        GHREPO=os.getenv("GHREPO", "BtbN/FFmpeg-CI")
+        GHREPO=os.getenv("GHREPO", "FFmpeg/FFmpeg-CI")
         GHCIID=os.getenv("GHCID", "ci.yml")
         GHAPIURL=os.getenv("GHAPIURL", "https://api.github.com")
         FJTOKEN=os.getenv("FJCITOKEN", None)
