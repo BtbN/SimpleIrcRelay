@@ -130,11 +130,11 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
             self.launch_delayed_ci()
         elif event_type == "pull_request" and action == "closed":
             self.handle_pr_issue_closed(msg)
-        elif event_type == "issue" and action == "opened":
+        elif event_type == "issues" and action == "opened":
             self.handle_pr_issue_opened(msg, action)
-        elif event_type == "issue" and action == "reopened":
+        elif event_type == "issues" and action == "reopened":
             self.handle_pr_issue_opened(msg, action)
-        elif event_type == "issue" and action == "closed":
+        elif event_type == "issues" and action == "closed":
             self.handle_pr_issue_closed(msg)
         elif event_type == "issue_comment" and action == "created":
             self.handle_issue_comment(msg)
