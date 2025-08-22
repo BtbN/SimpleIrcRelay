@@ -141,6 +141,8 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
         elif event_type == "push":
             self.launch_delayed_ci()
             self.handle_push(msg)
+        elif event_type == "action_run_failure":
+            self.handle_action_run_failure(msg)
 
         return web.Response()
 
@@ -236,6 +238,23 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
         repo = msg['repository']
 
         text = f"[{repo['full_name']}:{ref}] {msg['total_commits']} new commit{'s' if int(msg['total_commits']) > 1 else ''} ({msg['compare_url']}) pushed by {noping(msg['pusher']['username'])}"
+        self.post(text)
+
+    def handle_action_run_failure(self, msg):
+        run = msg.get('run', None)
+        if not run:
+            return
+        if run.get('event', '') != 'push':
+            return
+
+        prettyref = run.get('prettyref', '')
+        if not prettyref or prettyref.startswith('#'):
+            return
+
+        sha = run.get('commit_sha', '')[:7]
+        suffix = f' for {sha}' if sha else ''
+
+        text = f"[{run['repository']['full_name']}:{prettyref}] CI failed in {run['workflow_id']}{suffix}: {run['title']} ({run['html_url']})"
         self.post(text)
 
     async def periodic_ci_check(self):
