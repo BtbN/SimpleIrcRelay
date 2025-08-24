@@ -222,11 +222,12 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
         repo = msg['repository']
         user = msg['sender']
         action = 'merged' if obj.get('merged', False) else 'closed'
+        issue_type = 'Pull request' if msg.get('pull_request', None) else 'Issue'
 
         if merge_sha := obj.get('merge_commit_sha', ''):
             self.pr_merge_sha_cache[merge_sha] = True
 
-        text = f"[{repo['full_name']}] Pull request #{obj['number']} {action}: {obj['title']} ({obj['html_url']}) by {noping(user['username'])}"
+        text = f"[{repo['full_name']}] {issue_type} #{obj['number']} {action}: {obj['title']} ({obj['html_url']}) by {noping(user['username'])}"
         self.post(text)
 
     def handle_push(self, msg):
