@@ -247,6 +247,8 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
             return
         if run.get('event', '') != 'push':
             return
+        if run.get('status', '') == 'cancelled':
+            return
 
         prettyref = run.get('prettyref', '')
         if not prettyref or prettyref.startswith('#'):
