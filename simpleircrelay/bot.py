@@ -5,7 +5,7 @@ import aiohttp
 import aiosmtplib
 from email.header import Header
 from email.mime.text import MIMEText
-from email.utils import formataddr
+from email.utils import formataddr, formatdate
 from cachetools import TTLCache
 
 import irc.client
@@ -184,6 +184,7 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
             msg['To'] = mail_to
             msg['Reply-To'] = formataddr((str(Header(sender_name, 'utf-8')), sender['email']), 'utf-8')
             msg['Subject'] = Header(f"[PATCH] {pr['title']} (PR #{pr['number']})", 'utf-8')
+            msg['Date'] = formatdate()
 
             await aiosmtplib.send(
                 msg,
