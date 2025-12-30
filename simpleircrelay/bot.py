@@ -183,7 +183,7 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
             msg['From'] = formataddr((str(Header(sender_name, 'utf-8')), mail_from), 'utf-8')
             msg['To'] = mail_to
             msg['Reply-To'] = formataddr((str(Header(sender_name, 'utf-8')), sender['email']), 'utf-8')
-            msg['Subject'] = Header(f"[PATCH] {pr['title']} (PR #{pr['number']})", 'utf-8')
+            msg['Subject'] = Header(f"[PR] {pr['title']} (PR #{pr['number']})", 'utf-8')
             msg['Date'] = formatdate()
 
             await aiosmtplib.send(
