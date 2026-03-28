@@ -57,7 +57,10 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
         self.comment_buckets = {}
         self.comment_bucket_interval = int(os.getenv("IRC_COMMENT_INTERVAL", "900"))
         self.startup_timeout = int(os.getenv("IRC_STARTUP_TIMEOUT", "60"))
+        self.keepalive_interval = int(os.getenv("IRC_KEEPALIVE_INTERVAL", "60"))
+        self.keepalive_timeout = int(os.getenv("IRC_KEEPALIVE_TIMEOUT", "30"))
         self.stop_event = asyncio.Event()
+        self.pong_event = asyncio.Event()
 
     async def run(self, server, port, nick, ssl):
         try:
@@ -97,6 +100,21 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
         print("Disconnected")
         self.stop_event.set()
 
+    def on_pong(self, con, event):
+        self.pong_event.set()
+
+    async def keepalive(self):
+        while True:
+            await asyncio.sleep(self.keepalive_interval)
+            self.pong_event.clear()
+            self.connection.ping("keepalive")
+            try:
+                await asyncio.wait_for(self.pong_event.wait(), timeout=self.keepalive_timeout)
+            except asyncio.TimeoutError:
+                print("IRC keepalive timeout, disconnecting")
+                self.connection.disconnect("Ping timeout")
+                return
+
     async def shutdown(self):
         print("Shutting down...")
         self.flush_comment_buckets()
@@ -131,6 +149,7 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
             await self.site.start()
 
             asyncio.create_task(self.periodic_ci_check())
+            asyncio.create_task(self.keepalive())
 
             loop = asyncio.get_running_loop()
             for sig in (signal.SIGTERM, signal.SIGINT):
