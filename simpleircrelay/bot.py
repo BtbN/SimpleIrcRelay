@@ -13,6 +13,7 @@ import irc.client_aio
 
 import asyncio
 import html
+import signal
 import sys
 import os
 import re
@@ -67,6 +68,19 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
         print("Disconnected")
         sys.exit(0)
 
+    async def shutdown(self):
+        print("Shutting down...")
+        self.flush_comment_buckets()
+        self.connection.disconnect()
+
+    def flush_comment_buckets(self):
+        for key, bucket in list(self.comment_buckets.items()):
+            if bucket['task']:
+                bucket['task'].cancel()
+            if bucket['count'] > 0:
+                self.post_comment_summary(key, bucket)
+        self.comment_buckets.clear()
+
     async def setup_server(self):
         if self.is_setup:
             return
@@ -88,6 +102,10 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
             await self.site.start()
 
             asyncio.create_task(self.periodic_ci_check())
+
+            loop = asyncio.get_event_loop()
+            for sig in (signal.SIGTERM, signal.SIGINT):
+                loop.add_signal_handler(sig, lambda: asyncio.create_task(self.shutdown()))
 
             print("Setup done")
             self.is_setup = True
@@ -245,11 +263,14 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
             if bucket['count'] == 0:
                 self.comment_buckets.pop(key, None)
                 return
-            s = 's' if bucket['count'] > 1 else ''
-            text = f"[{bucket['repo_name']}] {bucket['count']} new comment{s} on {bucket['issue_type']} #{key[1]} {bucket['issue_title']} ({bucket['first_url']})"
-            self.post(text)
+            self.post_comment_summary(key, bucket)
             bucket['count'] = 0
             bucket['first_url'] = None
+
+    def post_comment_summary(self, key, bucket):
+        s = 's' if bucket['count'] > 1 else ''
+        text = f"[{bucket['repo_name']}] {bucket['count']} new comment{s} on {bucket['issue_type']} #{key[1]} {bucket['issue_title']} ({bucket['first_url']})"
+        self.post(text)
 
     def handle_pr_issue_closed(self, msg):
         obj = msg.get('pull_request', msg.get('issue', {}))
