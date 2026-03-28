@@ -48,6 +48,7 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
         self.is_setup = False
 
         self.future = None
+        self.exit_code = 0
 
         self.pr_merge_sha_cache = TTLCache(maxsize=10, ttl=30)
         self.handled_jobs_cache = TTLCache(maxsize=10000, ttl=60*60*3)
@@ -66,7 +67,7 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
 
     def on_disconnect(self, con, event):
         print("Disconnected")
-        sys.exit(0)
+        self.reactor.loop.stop()
 
     async def shutdown(self):
         print("Shutting down...")
@@ -111,7 +112,8 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
             self.is_setup = True
         except Exception as e:
             print(e)
-            sys.exit(1)
+            self.exit_code = 1
+            self.reactor.loop.stop()
 
     def post(self, msg):
         print("Posting message: " + msg)
@@ -427,9 +429,10 @@ def bot_main():
         client.connection.disconnect()
         if client.future:
             client.reactor.loop.run_until_complete(client.future)
+        client.reactor.loop.run_until_complete(asyncio.all_tasks(client.reactor.loop))
         client.reactor.loop.close()
 
-    return 0
+    return client.exit_code
 
 
 if __name__ == "__main__":
