@@ -56,6 +56,7 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
         self.ci_check_lock = asyncio.Lock()
         self.comment_buckets = {}
         self.comment_bucket_interval = int(os.getenv("IRC_COMMENT_INTERVAL", "900"))
+        self.stop_event = asyncio.Event()
 
     def on_welcome(self, con, event):
         print("Connected!")
@@ -67,7 +68,7 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
 
     def on_disconnect(self, con, event):
         print("Disconnected")
-        self.reactor.loop.stop()
+        self.stop_event.set()
 
     async def shutdown(self):
         print("Shutting down...")
@@ -113,7 +114,7 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
         except Exception as e:
             print(e)
             self.exit_code = 1
-            self.reactor.loop.stop()
+            self.stop_event.set()
 
     def post(self, msg):
         print("Posting message: " + msg)
@@ -403,7 +404,7 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
             self.handled_jobs_cache[job_id] = True
 
 
-def bot_main():
+async def async_bot_main():
     server = os.getenv("IRC_SERVER", "irc.libera.chat")
     port = os.getenv("IRC_PORT", "+6697")
     channel = os.getenv("IRC_CHANNEL", "#testmybot")
@@ -418,22 +419,24 @@ def bot_main():
     client = AioSimpleIRCClient(channel, http_host, http_port)
 
     try:
-        client.connect(server, port, nick, connect_factory=irc.connection.AioFactory(ssl=ssl))
+        await client.connection.connect(server, port, nick, connect_factory=irc.connection.AioFactory(ssl=ssl))
     except irc.client.ServerConnectionError as e:
         print(e)
         return 1
 
     try:
-        client.start()
+        await client.stop_event.wait()
     finally:
         client.connection.disconnect()
         if client.future:
-            client.reactor.loop.run_until_complete(client.future)
-        client.reactor.loop.run_until_complete(asyncio.all_tasks(client.reactor.loop))
-        client.reactor.loop.close()
+            await client.future
 
     return client.exit_code
 
 
+def bot_main():
+    sys.exit(asyncio.run(async_bot_main()))
+
+
 if __name__ == "__main__":
-    sys.exit(bot_main())
+    bot_main()
