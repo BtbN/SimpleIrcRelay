@@ -56,7 +56,34 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
         self.ci_check_lock = asyncio.Lock()
         self.comment_buckets = {}
         self.comment_bucket_interval = int(os.getenv("IRC_COMMENT_INTERVAL", "900"))
+        self.startup_timeout = int(os.getenv("IRC_STARTUP_TIMEOUT", "60"))
         self.stop_event = asyncio.Event()
+
+    async def run(self, server, port, nick, ssl):
+        try:
+            await self.connection.connect(server, port, nick, connect_factory=irc.connection.AioFactory(ssl=ssl))
+        except irc.client.ServerConnectionError as e:
+            print(e)
+            return 1
+
+        async def startup_watchdog():
+            await asyncio.sleep(self.startup_timeout)
+            if not self.is_setup:
+                print(f"Startup timed out after {self.startup_timeout}s")
+                self.exit_code = 1
+                self.stop_event.set()
+
+        watchdog = asyncio.create_task(startup_watchdog())
+
+        try:
+            await self.stop_event.wait()
+        finally:
+            watchdog.cancel()
+            self.connection.disconnect()
+            if self.future:
+                await self.future
+
+        return self.exit_code
 
     def on_welcome(self, con, event):
         print("Connected!")
@@ -417,21 +444,7 @@ async def async_bot_main():
     http_port = int(os.getenv("IRC_HTTP_PORT", "8787"))
 
     client = AioSimpleIRCClient(channel, http_host, http_port)
-
-    try:
-        await client.connection.connect(server, port, nick, connect_factory=irc.connection.AioFactory(ssl=ssl))
-    except irc.client.ServerConnectionError as e:
-        print(e)
-        return 1
-
-    try:
-        await client.stop_event.wait()
-    finally:
-        client.connection.disconnect()
-        if client.future:
-            await client.future
-
-    return client.exit_code
+    return await client.run(server, port, nick, ssl)
 
 
 def bot_main():
