@@ -52,6 +52,8 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
         self.handled_jobs_cache = TTLCache(maxsize=10000, ttl=60*60*3)
         self.ci_check_tasks = []
         self.ci_check_lock = asyncio.Lock()
+        self.comment_buckets = {}
+        self.comment_bucket_interval = int(os.getenv("IRC_COMMENT_INTERVAL", "900"))
 
     def on_welcome(self, con, event):
         print("Connected!")
@@ -215,8 +217,39 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
         user = msg['sender']
         issue_type = 'pull request' if msg.get('is_pull', False) else 'issue'
 
-        text = f"[{repo['full_name']}] New comment on {issue_type} #{issue['number']} {issue['title']} ({msg['comment']['html_url']}) by {noping(user['username'])}"
-        self.post(text)
+        key = (repo['full_name'], issue['number'])
+
+        if key not in self.comment_buckets:
+            text = f"[{repo['full_name']}] New comment on {issue_type} #{issue['number']} {issue['title']} ({msg['comment']['html_url']}) by {noping(user['username'])}"
+            self.post(text)
+            self.comment_buckets[key] = {
+                'count': 0,
+                'first_url': None,
+                'issue_title': issue['title'],
+                'issue_type': issue_type,
+                'repo_name': repo['full_name'],
+                'task': asyncio.create_task(self.process_comment_bucket(key)),
+            }
+        else:
+            bucket = self.comment_buckets[key]
+            bucket['count'] += 1
+            if bucket['first_url'] is None:
+                bucket['first_url'] = msg['comment']['html_url']
+
+    async def process_comment_bucket(self, key):
+        while True:
+            await asyncio.sleep(self.comment_bucket_interval)
+            bucket = self.comment_buckets.get(key)
+            if not bucket:
+                return
+            if bucket['count'] == 0:
+                self.comment_buckets.pop(key, None)
+                return
+            s = 's' if bucket['count'] > 1 else ''
+            text = f"[{bucket['repo_name']}] {bucket['count']} new comment{s} on {bucket['issue_type']} #{key[1]} {bucket['issue_title']} ({bucket['first_url']})"
+            self.post(text)
+            bucket['count'] = 0
+            bucket['first_url'] = None
 
     def handle_pr_issue_closed(self, msg):
         obj = msg.get('pull_request', msg.get('issue', {}))
