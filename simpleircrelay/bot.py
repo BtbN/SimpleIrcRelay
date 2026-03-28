@@ -63,7 +63,7 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
 
     def on_join(self, con, event):
         print("Joined!")
-        self.future = asyncio.ensure_future(self.setup_server(), loop=con.reactor.loop)
+        self.future = asyncio.create_task(self.setup_server())
 
     def on_disconnect(self, con, event):
         print("Disconnected")
@@ -104,7 +104,7 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
 
             asyncio.create_task(self.periodic_ci_check())
 
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
             for sig in (signal.SIGTERM, signal.SIGINT):
                 loop.add_signal_handler(sig, lambda: asyncio.create_task(self.shutdown()))
 
