@@ -209,7 +209,7 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
             mail_from = os.environ.get("MAIL_FROM", "bot@localhost")
             mail_to = os.environ.get("MAIL_TO", "root@localhost")
 
-            async with aiohttp.ClientSession() as session:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
                 async with session.get(pr['patch_url']) as response:
                     if response.status == 200:
                         patch_content = await response.text()
@@ -387,7 +387,7 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
 
         CICOUNTS={}
         LAUNCHEDJOBS = set()
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=30)) as session:
             headers = {
                 "Accept": "application/json",
                 "Authorization": f"Bearer {FJTOKEN}"
