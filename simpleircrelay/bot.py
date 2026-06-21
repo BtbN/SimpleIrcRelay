@@ -278,6 +278,9 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
         text = f"[{repo['full_name']}] {issue_type} #{obj['number']} {action}: {obj['title']} ({obj['html_url']}) by {noping(user['username'])}"
         self.post(text)
 
+    def format_issue_comment_text(self, repo_name, issue_type, issue_number, issue_title, comment_url, username):
+        return f"[{repo_name}] New comment on {issue_type} #{issue_number} {issue_title} ({comment_url}) by {noping(username)}"
+
     def handle_issue_comment(self, msg):
         issue = msg['issue']
         repo = msg['repository']
@@ -287,11 +290,19 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
         key = (repo['full_name'], issue['number'])
 
         if key not in self.comment_buckets:
-            text = f"[{repo['full_name']}] New comment on {issue_type} #{issue['number']} {issue['title']} ({msg['comment']['html_url']}) by {noping(user['username'])}"
+            text = self.format_issue_comment_text(
+                repo['full_name'],
+                issue_type,
+                issue['number'],
+                issue['title'],
+                msg['comment']['html_url'],
+                user['username'],
+            )
             self.post(text)
             self.comment_buckets[key] = {
                 'count': 0,
                 'first_url': None,
+                'first_user': None,
                 'issue_title': issue['title'],
                 'issue_type': issue_type,
                 'repo_name': repo['full_name'],
@@ -302,6 +313,7 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
             bucket['count'] += 1
             if bucket['first_url'] is None:
                 bucket['first_url'] = msg['comment']['html_url']
+                bucket['first_user'] = user['username']
 
     async def process_comment_bucket(self, key):
         while True:
@@ -315,8 +327,21 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
             self.post_comment_summary(key, bucket)
             bucket['count'] = 0
             bucket['first_url'] = None
+            bucket['first_user'] = None
 
     def post_comment_summary(self, key, bucket):
+        if bucket['count'] == 1:
+            text = self.format_issue_comment_text(
+                bucket['repo_name'],
+                bucket['issue_type'],
+                key[1],
+                bucket['issue_title'],
+                bucket['first_url'],
+                bucket['first_user'],
+            )
+            self.post(text)
+            return
+
         s = 's' if bucket['count'] > 1 else ''
         text = f"[{bucket['repo_name']}] {bucket['count']} new comment{s} on {bucket['issue_type']} #{key[1]} {bucket['issue_title']} ({bucket['first_url']})"
         self.post(text)
