@@ -17,6 +17,7 @@ import signal
 import sys
 import os
 import re
+from urllib.parse import quote
 
 
 LINK_WITH_DESC = re.compile(r'<([^|>]+)\|([^>]+)>')
@@ -207,6 +208,8 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
             self.handle_pr_issue_closed(msg)
         elif event_type == "issue_comment" and action == "created":
             self.handle_issue_comment(msg)
+        elif event_type == "create":
+            self.handle_create(msg)
         elif event_type == "push":
             self.launch_delayed_ci()
             self.handle_push(msg)
@@ -359,9 +362,26 @@ class AioSimpleIRCClient(irc.client_aio.AioSimpleIRCClient):
         text = f"[{repo['full_name']}] {issue_type} #{obj['number']} {action}: {obj['title']} ({obj['html_url']}) by {noping(user['username'])}"
         self.post(text)
 
+    def handle_create(self, msg):
+        if msg.get('ref_type') != 'tag':
+            return
+
+        repo = msg['repository']
+        user = msg['sender']
+        tag = msg['ref'].removeprefix('refs/tags/')
+        tag_url = f"{repo['html_url']}/src/tag/{quote(tag, safe='')}"
+        sha = msg.get('sha', '')[:7]
+        sha_text = f" at {sha}" if sha else ''
+
+        text = f"[{repo['full_name']}] New tag {tag}{sha_text} ({tag_url}) by {noping(user['username'])}"
+        self.post(text)
+
     def handle_push(self, msg):
         # Skip PR merges, as we just announced them as such
         if msg['after'] in self.pr_merge_sha_cache:
+            return
+
+        if msg['ref'].startswith('refs/tags/'):
             return
 
         ref = msg['ref'].removeprefix('refs/heads/')
